@@ -3,17 +3,17 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTheme } from '@/contexts/ThemeContext';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Sparkles, Coins, Flame, TrendingUp, Lock, Settings, Trophy, ChevronDown, ChevronUp } from 'lucide-react';
+import { Sparkles, Coins, Flame, TrendingUp, Lock, Settings, Trophy, ChevronDown, ChevronUp, Award } from 'lucide-react';
 import { Progress } from '@/components/ui/progress';
 import { Button } from '@/components/ui/button';
 
 const sectors = [
   { id: 'chores', name: 'Chores', icon: '🧹', active: true },
-  { id: 'fitness', name: 'Fitness', icon: '💪', active: false },
-  { id: 'learning', name: 'Learning', icon: '📚', active: false },
-  { id: 'cooking', name: 'Cooking', icon: '🍳', active: false },
-  { id: 'mind', name: 'Mind', icon: '🧠', active: false },
-  { id: 'faith', name: 'Faith', icon: '🙏', active: false }
+  { id: 'fitness', name: 'Fitness', icon: '💪', active: true },
+  { id: 'learning', name: 'Learning', icon: '📚', active: true },
+  { id: 'cooking', name: 'Cooking', icon: '🍳', active: true },
+  { id: 'mind', name: 'Mind', icon: '🧠', active: true },
+  { id: 'faith', name: 'Faith', icon: '🙏', active: true }
 ];
 
 export default function Dashboard() {
@@ -122,27 +122,27 @@ export default function Dashboard() {
                 >
                   <div className="flex justify-between items-center">
                     <span className="text-sm text-muted-foreground">Chore Coins</span>
-                    <span className="text-lg font-bold text-foreground">{user.chore_coins}</span>
+                    <span className="text-lg font-bold text-foreground">{user.chores_coins}</span>
                   </div>
-                  <div className="flex justify-between items-center opacity-50">
+                  <div className="flex justify-between items-center">
                     <span className="text-sm text-muted-foreground">Fitness Coins</span>
-                    <span className="text-lg font-bold text-foreground">0</span>
+                    <span className="text-lg font-bold text-foreground">{user.fitness_coins}</span>
                   </div>
-                  <div className="flex justify-between items-center opacity-50">
+                  <div className="flex justify-between items-center">
                     <span className="text-sm text-muted-foreground">Learning Coins</span>
-                    <span className="text-lg font-bold text-foreground">0</span>
+                    <span className="text-lg font-bold text-foreground">{user.learning_coins}</span>
                   </div>
-                  <div className="flex justify-between items-center opacity-50">
+                  <div className="flex justify-between items-center">
                     <span className="text-sm text-muted-foreground">Cooking Coins</span>
-                    <span className="text-lg font-bold text-foreground">0</span>
+                    <span className="text-lg font-bold text-foreground">{user.cooking_coins}</span>
                   </div>
-                  <div className="flex justify-between items-center opacity-50">
+                  <div className="flex justify-between items-center">
                     <span className="text-sm text-muted-foreground">Mind Coins</span>
-                    <span className="text-lg font-bold text-foreground">0</span>
+                    <span className="text-lg font-bold text-foreground">{user.mind_coins}</span>
                   </div>
-                  <div className="flex justify-between items-center opacity-50">
+                  <div className="flex justify-between items-center">
                     <span className="text-sm text-muted-foreground">Faith Coins</span>
-                    <span className="text-lg font-bold text-foreground">0</span>
+                    <span className="text-lg font-bold text-foreground">{user.faith_coins}</span>
                   </div>
                 </motion.div>
               )}
@@ -162,10 +162,10 @@ export default function Dashboard() {
         </div>
 
         {/* Quick Actions */}
-        <div className="flex gap-4">
+        <div className="grid grid-cols-3 gap-3">
           <Button
             onClick={() => navigate('/leaderboard')}
-            className={`flex-1 ${isPlayful ? 'rounded-full' : 'rounded-md'}`}
+            className={`${isPlayful ? 'rounded-full' : 'rounded-md'}`}
             variant="outline"
             data-testid="leaderboard-button"
           >
@@ -173,8 +173,17 @@ export default function Dashboard() {
             Leaderboard
           </Button>
           <Button
+            onClick={() => navigate('/achievements')}
+            className={`${isPlayful ? 'rounded-full' : 'rounded-md'}`}
+            variant="outline"
+            data-testid="achievements-button"
+          >
+            <Award className="w-4 h-4 mr-2" />
+            Achievements
+          </Button>
+          <Button
             onClick={() => navigate('/settings')}
-            className={`flex-1 ${isPlayful ? 'rounded-full' : 'rounded-md'}`}
+            className={`${isPlayful ? 'rounded-full' : 'rounded-md'}`}
             variant="outline"
             data-testid="settings-button"
           >

@@ -8,10 +8,13 @@ import Login from '@/pages/Login';
 import Register from '@/pages/Register';
 import Dashboard from '@/pages/Dashboard';
 import ChoresSector from '@/pages/ChoresSector';
+import GenericSectorPage from '@/pages/GenericSectorPage';
 import Shop from '@/pages/Shop';
+import GenericSectorShop from '@/pages/GenericSectorShop';
 import Leaderboard from '@/pages/Leaderboard';
 import Groups from '@/pages/Groups';
 import Settings from '@/pages/Settings';
+import Achievements from '@/pages/Achievements';
 
 const ProtectedRoute = ({ children }) => {
   const { user, loading } = useAuth();
@@ -56,10 +59,34 @@ function AppContent() {
             }
           />
           <Route
+            path="/sector/:sector"
+            element={
+              <ProtectedRoute>
+                <GenericSectorPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
             path="/shop"
             element={
               <ProtectedRoute>
                 <Shop />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/shop/:sector"
+            element={
+              <ProtectedRoute>
+                <GenericSectorShop />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/achievements"
+            element={
+              <ProtectedRoute>
+                <Achievements />
               </ProtectedRoute>
             }
           />
