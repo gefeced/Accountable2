@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTheme } from '@/contexts/ThemeContext';
@@ -5,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { motion } from 'framer-motion';
-import { ArrowLeft, LogOut, Palette, User } from 'lucide-react';
+import { ArrowLeft, LogOut, Palette, User, Camera } from 'lucide-react';
 import { toast } from 'sonner';
 import axios from 'axios';
 
@@ -17,6 +18,7 @@ export default function Settings() {
   const { theme, toggleTheme } = useTheme();
   const navigate = useNavigate();
   const isPlayful = theme === 'playful';
+  const [profilePic, setProfilePic] = useState(localStorage.getItem('profilePic') || '');
 
   if (!user) {
     navigate('/login');
@@ -34,6 +36,20 @@ export default function Settings() {
       );
     } catch (error) {
       console.error('Failed to update theme:', error);
+    }
+  };
+
+  const handleProfilePicUpload = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        const base64String = reader.result;
+        setProfilePic(base64String);
+        localStorage.setItem('profilePic', base64String);
+        toast.success('Profile picture updated!');
+      };
+      reader.readAsDataURL(file);
     }
   };
 
@@ -63,10 +79,30 @@ export default function Settings() {
         {/* Profile Section */}
         <div className={`bg-card p-6 border ${isPlayful ? 'playful-border playful-shadow rounded-[1.5rem]' : 'clean-border clean-shadow rounded-lg'}`}>
           <div className="flex items-center gap-4 mb-4">
-            <div className={`w-16 h-16 rounded-full bg-primary flex items-center justify-center text-white text-2xl font-bold ${
-              isPlayful ? 'playful-shadow' : 'clean-shadow'
-            }`}>
-              {user.username.charAt(0).toUpperCase()}
+            <div className="relative group">
+              <div 
+                className={`w-16 h-16 rounded-full bg-primary flex items-center justify-center text-white text-2xl font-bold cursor-pointer overflow-hidden ${
+                  isPlayful ? 'playful-shadow' : 'clean-shadow'
+                }`}
+                onClick={() => document.getElementById('profilePicInput').click()}
+              >
+                {profilePic ? (
+                  <img src={profilePic} alt="Profile" className="w-full h-full object-cover" />
+                ) : (
+                  user.username.charAt(0).toUpperCase()
+                )}
+                <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-50 transition-all flex items-center justify-center">
+                  <Camera className="w-6 h-6 text-white opacity-0 group-hover:opacity-100 transition-all" />
+                </div>
+              </div>
+              <input
+                id="profilePicInput"
+                type="file"
+                accept="image/*"
+                onChange={handleProfilePicUpload}
+                className="hidden"
+                data-testid="profile-pic-input"
+              />
             </div>
             <div>
               <h2 className="text-xl font-bold">{user.username}</h2>
@@ -99,7 +135,7 @@ export default function Settings() {
                   Theme Mode
                 </Label>
                 <p className="text-sm text-muted-foreground mt-1">
-                  {isPlayful ? 'Playful & Energetic' : 'Clean & Minimal'}
+                  {isPlayful ? 'Playful & Gamified' : 'Clean & Blue'}
                 </p>
               </div>
               <Switch
@@ -115,10 +151,10 @@ export default function Settings() {
               <div className="grid grid-cols-2 gap-3">
                 <motion.div
                   whileHover={{ scale: 1.05 }}
-                  className={`p-4 border text-center cursor-pointer ${
+                  className={`p-4 border text-center cursor-pointer transition-all ${
                     isPlayful
-                      ? 'bg-primary text-white rounded-[1.5rem] playful-border playful-shadow'
-                      : 'bg-secondary rounded-lg clean-border'
+                      ? 'bg-purple-600 text-white border-purple-700 rounded-[1.5rem] playful-border playful-shadow'
+                      : 'bg-card text-foreground border-border rounded-[1.5rem] clean-border'
                   }`}
                   onClick={() => !isPlayful && handleThemeToggle()}
                   data-testid="playful-preview"
@@ -128,10 +164,10 @@ export default function Settings() {
                 </motion.div>
                 <motion.div
                   whileHover={{ scale: 1.05 }}
-                  className={`p-4 border text-center cursor-pointer ${
+                  className={`p-4 border text-center cursor-pointer transition-all ${
                     !isPlayful
-                      ? 'bg-primary text-white rounded-lg clean-border clean-shadow'
-                      : 'bg-secondary rounded-[1.5rem] playful-border'
+                      ? 'bg-blue-500 text-white border-blue-600 rounded-lg clean-border clean-shadow'
+                      : 'bg-card text-foreground border-border rounded-lg playful-border'
                   }`}
                   onClick={() => isPlayful && handleThemeToggle()}
                   data-testid="clean-preview"
