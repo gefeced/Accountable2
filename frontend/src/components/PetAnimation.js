@@ -190,7 +190,7 @@ export default function PetAnimation() {
   const previewRemaining = previewTimers[activePet.id];
 
   return (
-    <div className="pointer-events-none fixed bottom-6 right-6 z-50">
+    <div className="pointer-events-none fixed bottom-20 right-3 z-50 sm:bottom-6 sm:right-6">
       <AnimatePresence mode="wait">
         <motion.div
           key={activePet.id}
@@ -212,7 +212,7 @@ export default function PetAnimation() {
                 initial={{ opacity: 0, y: 8, scale: 0.95 }}
                 animate={{ opacity: 1, y: 0, scale: 1 }}
                 exit={{ opacity: 0, y: 8, scale: 0.95 }}
-                className="absolute -top-24 right-2 max-w-[240px] rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-slate-700 shadow-xl"
+                className="absolute -top-24 right-0 max-w-[180px] rounded-2xl border border-slate-200 bg-white px-3 py-2 text-xs font-medium text-slate-700 shadow-xl sm:right-2 sm:max-w-[240px] sm:px-4 sm:py-3 sm:text-sm"
               >
                 <p>{speechMessage}</p>
                 {previewRemaining ? (
@@ -227,13 +227,13 @@ export default function PetAnimation() {
           <button
             type="button"
             onClick={handlePetClick}
-            className="pointer-events-auto rounded-full bg-white/90 p-2 shadow-xl transition-transform hover:scale-105"
+            className="pointer-events-auto rounded-full bg-white/90 p-1.5 shadow-xl transition-transform hover:scale-105 sm:p-2"
             data-testid="pet-animation"
           >
             <img
               src={config.image}
               alt={config.label}
-              className="h-24 w-24 object-contain"
+              className="h-16 w-16 object-contain sm:h-24 sm:w-24"
             />
           </button>
         </motion.div>

@@ -194,6 +194,10 @@ class InventoryEquipRequest(BaseModel):
     item_id: str
     equipped: bool = True
 
+
+class ResetProgressRequest(BaseModel):
+    code: str
+
 # Helper functions
 def hash_password(password: str) -> str:
     return bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
@@ -243,6 +247,49 @@ def normalize_chore_templates(templates: List[str]) -> List[str]:
         seen.add(key)
         normalized.append(cleaned[:60])
     return normalized[:30]
+
+
+def build_reset_user_state(current_user: User) -> Dict[str, Any]:
+    return {
+        "username": current_user.username,
+        "accountable_xp": 0,
+        "accountable_level": 1,
+        "coins": 0,
+        "streak": 0,
+        "last_active": datetime.now(timezone.utc).isoformat(),
+        "group_id": None,
+        "profile_picture": None,
+        "chores_xp": 0,
+        "chores_level": 1,
+        "chores_coins": 0,
+        "fitness_xp": 0,
+        "fitness_level": 1,
+        "fitness_coins": 0,
+        "learning_xp": 0,
+        "learning_level": 1,
+        "learning_coins": 0,
+        "mind_xp": 0,
+        "mind_level": 1,
+        "mind_coins": 0,
+        "faith_xp": 0,
+        "faith_level": 1,
+        "faith_coins": 0,
+        "cooking_xp": 0,
+        "cooking_level": 1,
+        "cooking_coins": 0,
+        "chores_streak": 0,
+        "last_chores_date": None,
+        "achievements": [],
+        "pets_owned": [],
+        "music_player_owned": False,
+        "music_tracks_owned": [],
+        "active_previews": {},
+        "chore_templates": list(DEFAULT_CHORE_TEMPLATES),
+        "equipped_theme_item_id": None,
+        "equipped_pet_item_id": None,
+        "equipped_music_item_id": None,
+        "music_player_enabled": False,
+    }
 
 async def check_achievements(user: User) -> List[str]:
     new_achievements = []
@@ -343,6 +390,31 @@ async def update_profile_picture(
         {"$set": {"profile_picture": payload.profile_picture}},
     )
     return {"success": True, "profile_picture": payload.profile_picture}
+
+
+@api_router.post("/user/reset-progress")
+async def reset_progress(
+    payload: ResetProgressRequest,
+    current_user: User = Depends(get_current_user),
+):
+    if payload.code != "1234":
+        raise HTTPException(status_code=400, detail="Invalid reset code")
+
+    await db.activities.delete_many({"user_id": current_user.id})
+    await db.user_inventory.delete_many({"user_id": current_user.id})
+
+    if current_user.group_id:
+        await db.groups.update_many(
+            {"members": current_user.id},
+            {"$pull": {"members": current_user.id}},
+        )
+        await db.groups.delete_many({"members": {"$size": 0}})
+
+    await db.users.update_one(
+        {"id": current_user.id},
+        {"$set": build_reset_user_state(current_user)},
+    )
+    return {"success": True}
 
 
 @api_router.get("/chores/templates")

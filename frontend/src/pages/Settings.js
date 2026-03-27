@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTheme } from '@/contexts/ThemeContext';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { ArrowLeft, LogOut, User, Camera } from 'lucide-react';
 import { toast } from 'sonner';
 import axios from 'axios';
@@ -16,6 +17,8 @@ export default function Settings() {
   const navigate = useNavigate();
   const isPlayful = theme === 'playful';
   const [profilePic, setProfilePic] = useState(user?.profile_picture || '');
+  const [resetCode, setResetCode] = useState('');
+  const [resetting, setResetting] = useState(false);
 
   useEffect(() => {
     setProfilePic(user?.profile_picture || '');
@@ -55,9 +58,34 @@ export default function Settings() {
     navigate('/login');
   };
 
+  const handleResetProgress = async () => {
+    if (resetCode !== '1234') {
+      toast.error('Type 1234 to confirm the reset');
+      return;
+    }
+
+    setResetting(true);
+    try {
+      await axios.post(
+        `${API}/user/reset-progress`,
+        { code: resetCode },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      await refreshUser();
+      setProfilePic('');
+      setResetCode('');
+      toast.success('Progress reset complete');
+      navigate('/');
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'Reset failed');
+    } finally {
+      setResetting(false);
+    }
+  };
+
   return (
     <div className="min-h-screen pb-24">
-      <div className="max-w-2xl mx-auto p-6 space-y-6">
+      <div className="mx-auto max-w-2xl p-4 sm:p-6 space-y-6">
         {/* Header */}
         <div className="flex items-center justify-between">
           <Button
@@ -74,7 +102,7 @@ export default function Settings() {
 
         {/* Profile Section */}
         <div className={`bg-card p-6 border ${isPlayful ? 'playful-border playful-shadow rounded-[1.5rem]' : 'clean-border clean-shadow rounded-lg'}`}>
-          <div className="flex items-center gap-4 mb-4">
+          <div className="mb-4 flex items-center gap-4">
             <div className="relative group">
               <div 
                 className={`w-16 h-16 rounded-full bg-primary flex items-center justify-center text-white text-2xl font-bold cursor-pointer overflow-hidden ${
@@ -105,7 +133,7 @@ export default function Settings() {
               <p className="text-sm text-muted-foreground">{user.email}</p>
             </div>
           </div>
-          <div className="grid grid-cols-2 gap-4 pt-4 border-t">
+          <div className="grid grid-cols-2 gap-4 border-t pt-4">
             <div>
               <p className="text-sm text-muted-foreground">Level</p>
               <p className="text-2xl font-bold">{user.accountable_level}</p>
@@ -129,6 +157,31 @@ export default function Settings() {
             >
               <User className="w-4 h-4 mr-2" />
               Manage Groups
+            </Button>
+          </div>
+        </div>
+
+        <div className={`bg-card p-6 border ${isPlayful ? 'playful-border playful-shadow rounded-[1.5rem]' : 'clean-border clean-shadow rounded-lg'}`}>
+          <h2 className="text-xl font-bold">Reset Progress</h2>
+          <p className="mt-2 text-sm text-muted-foreground">
+            For testing only. This clears activities, coins, streaks, inventory, pets, music, achievements, previews, and sector progress for this account.
+          </p>
+          <div className="mt-4 space-y-3">
+            <Input
+              value={resetCode}
+              onChange={(event) => setResetCode(event.target.value)}
+              placeholder="Type 1234 to confirm"
+              inputMode="numeric"
+              data-testid="reset-progress-input"
+            />
+            <Button
+              onClick={handleResetProgress}
+              variant="destructive"
+              disabled={resetting || resetCode !== '1234'}
+              className={`w-full ${isPlayful ? 'rounded-full' : 'rounded-md'}`}
+              data-testid="reset-progress-button"
+            >
+              {resetting ? 'Resetting...' : 'Confirm Reset'}
             </Button>
           </div>
         </div>
