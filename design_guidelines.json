@@ -1,0 +1,154 @@
+{
+  "identity": {
+    "name": "E1: The Anti-AI Designer",
+    "mission": "Create a gamified lifestyle tracker that breaks the generic 'SaaS' look. Use dual themes to offer two distinct emotional experiences: High-Energy Play vs. Zen Focus.",
+    "principles": [
+      "Fusion over Imitation: Mix gaming UI with productivity tools.",
+      "Emotion First: Every interaction must reward the user (confetti, sounds, haptics).",
+      "Content is King: The 'Chore' is the hero, not the checklist.",
+      "Zoom In: Big, bold icons and text. Don't squint."
+    ]
+  },
+  "themes": {
+    "strategy": "Dual Mode System. The app must support 'Playful' and 'Clean' modes, toggleable in Settings. This affects Colors, Typography, Radius, and Spacing.",
+    "modes": {
+      "playful": {
+        "emotion": "Juicy, Bouncy, Energetic",
+        "colors": {
+          "background": "hsl(48 100% 96%)", 
+          "foreground": "hsl(260 20% 20%)",
+          "primary": "hsl(262 83% 58%)",
+          "primary_foreground": "hsl(0 0% 100%)",
+          "card": "hsl(0 0% 100%)",
+          "card_foreground": "hsl(260 20% 20%)",
+          "border": "hsl(262 83% 90%)",
+          "accent": "hsl(35 92% 65%)", 
+          "ring": "hsl(262 83% 58%)"
+        },
+        "typography": {
+          "heading_font": "Fredoka, sans-serif",
+          "body_font": "Nunito, sans-serif"
+        },
+        "shape": {
+          "radius": "1.5rem",
+          "border_width": "2px",
+          "shadow": "4px 4px 0px 0px #000000"
+        }
+      },
+      "clean": {
+        "emotion": "Zen, Precise, Adult",
+        "colors": {
+          "background": "hsl(0 0% 100%)",
+          "foreground": "hsl(240 10% 3.9%)",
+          "primary": "hsl(240 5.9% 10%)",
+          "primary_foreground": "hsl(0 0% 98%)",
+          "card": "hsl(0 0% 100%)",
+          "card_foreground": "hsl(240 10% 3.9%)",
+          "border": "hsl(240 5.9% 90%)",
+          "accent": "hsl(240 4.8% 95.9%)",
+          "ring": "hsl(240 5.9% 10%)"
+        },
+        "typography": {
+          "heading_font": "Outfit, sans-serif",
+          "body_font": "Inter, sans-serif"
+        },
+        "shape": {
+          "radius": "0.5rem",
+          "border_width": "1px",
+          "shadow": "0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1)"
+        }
+      }
+    }
+  },
+  "layout_strategy": {
+    "dashboard": {
+      "structure": "Bento Grid",
+      "grid_cols": "grid-cols-2",
+      "gap": "gap-4",
+      "modules": [
+        {
+          "id": "xp_card",
+          "span": "col-span-2",
+          "style": "Gradient background (Playful) or Solid Border (Clean)"
+        },
+        {
+          "id": "level_progress",
+          "span": "col-span-2",
+          "content": "Level X + Progress Bar"
+        },
+        {
+          "id": "coins",
+          "span": "col-span-1",
+          "icon": "Coin Icon"
+        },
+        {
+          "id": "streak",
+          "span": "col-span-1",
+          "icon": "Fire Icon"
+        },
+        {
+          "id": "sector_breakdown",
+          "span": "col-span-2",
+          "style": "Horizontal Scroll or Grid"
+        }
+      ]
+    },
+    "sectors": {
+      "active": "Chores",
+      "coming_soon": ["Fitness", "Learning", "Cooking", "Mind", "Faith"],
+      "visual_state": "Active sectors are full color/clickable. Coming Soon are grayscale/opacity-50 with Lock Icon."
+    }
+  },
+  "components": {
+    "buttons": {
+      "playful": "Pill shape (rounded-full), bouncy hover effect (scale-105), hard shadow.",
+      "clean": "Slightly rounded (rounded-md), subtle hover (bg-accent), no scale."
+    },
+    "cards": {
+      "base": "bg-card text-card-foreground overflow-hidden",
+      "playful": "border-2 border-black/10 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]",
+      "clean": "border border-border shadow-sm"
+    },
+    "progress_bar": {
+      "height": "h-4",
+      "playful": "bg-black/10 indicator-bg-primary rounded-full border-2 border-black",
+      "clean": "bg-secondary indicator-bg-primary rounded-full"
+    },
+    "bottom_nav": {
+      "visible": true,
+      "items": ["Home", "Leaderboard", "Shop", "Settings"],
+      "style": "Sticky bottom, glassmorphism in Clean mode, solid pill in Playful mode."
+    }
+  },
+  "assets": {
+    "icons": {
+      "library": "lucide-react",
+      "style": "Stroke width 2.5px for Playful, 1.5px for Clean."
+    },
+    "images": {
+      "background_playful": "https://images.unsplash.com/photo-1543521372-695143441c1d?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NTY2ODh8MHwxfHNlYXJjaHwxfHxjb2xvcmZ1bCUyMG1lbXBoaXMlMjBwYXR0ZXJuJTIwYmFja2dyb3VuZHxlbnwwfHx8fDE3NzI5MTE4MDd8MA&ixlib=rb-4.1.0&q=85",
+      "background_clean": "https://images.pexels.com/photos/479444/pexels-photo-479444.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940",
+      "coin": "https://images.unsplash.com/photo-1645068633124-6bde8bd2e322?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA1NjZ8MHwxfHNlYXJjaHw0fHwzZCUyMGdvbGQlMjBjb2luJTIwaWNvbnxlbnwwfHx8fDE3NzI5MTE4MDh8MA&ixlib=rb-4.1.0&q=85",
+      "potion": "https://images.unsplash.com/photo-1730266760598-edbdb4a9e1e0?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjAzMjh8MHwxfHNlYXJjaHwxfHwzZCUyMHBvdGlvbiUyMGJvdHRsZSUyMGljb258ZW58MHx8fHwxNzcyOTExODA5fDA&ixlib=rb-4.1.0&q=85"
+    }
+  },
+  "instructions_to_main_agent": [
+    "1. THEME IMPLEMENTATION: Use CSS variables in 'index.css' scoped to '.theme-playful' and '.theme-clean' classes on the body. Default to 'theme-playful'.",
+    "2. FONT SETUP: Import 'Fredoka', 'Nunito', 'Outfit', and 'Inter' from Google Fonts in 'index.css'.",
+    "3. SHADCN OVERRIDE: Modify 'tailwind.config.js' to use CSS variables for borderRadius and colors so they adapt to the theme class.",
+    "4. ROUTING: Create routes for '/', '/login', '/register', '/sector/chores', '/shop', '/leaderboard', '/settings'.",
+    "5. STATE: Use Context API for 'ThemeContext' and 'UserContext' (XP, Coins, Level).",
+    "6. ANIMATION: Use 'framer-motion' (if available) or CSS transitions for the bouncy effects in Playful mode.",
+    "7. TESTING: Add 'data-testid' to all interactive elements (buttons, inputs, sector cards)."
+  ],
+  "universal_guidelines": [
+    "Do not use generic gradients.",
+    "Create depth through layered design elements.",
+    "Use 2-3x more spacing than typical designs.",
+    "Never use AI assistant Emoji characters.",
+    "Components MUST use named exports.",
+    "Pages MUST use default exports.",
+    "Use 'sonner' for toasts.",
+    "Add 'data-testid' to all interactive elements."
+  ]
+}
