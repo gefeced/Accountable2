@@ -6,7 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { ArrowLeft, Calendar as CalendarIcon, Plus, Trash2 } from 'lucide-react';
+import { ArrowLeft, Calendar as CalendarIcon, Flame, Plus, Trash2 } from 'lucide-react';
 import { Calendar } from '@/components/ui/calendar';
 import { toast } from 'sonner';
 
@@ -40,13 +40,17 @@ export default function PocketTools() {
 
         <div className={`bg-card p-6 border ${isPlayful ? 'playful-border playful-shadow rounded-[1.5rem]' : 'clean-border clean-shadow rounded-lg'}`}>
           <Tabs value={activeTool} onValueChange={setActiveTool} className="w-full">
-            <TabsList className="grid w-full grid-cols-2">
+            <TabsList className="grid w-full grid-cols-3">
               <TabsTrigger value="calendar">
                 <CalendarIcon className="w-4 h-4 mr-2" />
                 Calendar
               </TabsTrigger>
               <TabsTrigger value="calculator">
                 📊 Calculator
+              </TabsTrigger>
+              <TabsTrigger value="calories">
+                <Flame className="w-4 h-4 mr-2" />
+                Calories
               </TabsTrigger>
             </TabsList>
 
@@ -56,6 +60,10 @@ export default function PocketTools() {
 
             <TabsContent value="calculator">
               <CalculatorTool isPlayful={isPlayful} />
+            </TabsContent>
+
+            <TabsContent value="calories">
+              <CalorieTrackerTool isPlayful={isPlayful} />
             </TabsContent>
           </Tabs>
         </div>
@@ -429,6 +437,253 @@ function CalculatorTool({ isPlayful }) {
 
           <button onClick={() => handleNumber('0')} className={`${buttonClass} col-span-2`} data-testid="calc-0">0</button>
           <button onClick={handleDecimal} className={buttonClass} data-testid="calc-dot">.</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function CalorieTrackerTool({ isPlayful }) {
+  const [selectedDay, setSelectedDay] = useState(() => new Date().toISOString().split('T')[0]);
+  const [entries, setEntries] = useState(() => {
+    const saved = localStorage.getItem('accountable-calorie-entries');
+    return saved ? JSON.parse(saved) : [];
+  });
+  const [form, setForm] = useState({
+    meal: 'breakfast',
+    food: '',
+    calories: '',
+  });
+
+  const saveEntries = (nextEntries) => {
+    setEntries(nextEntries);
+    localStorage.setItem('accountable-calorie-entries', JSON.stringify(nextEntries));
+  };
+
+  const addEntry = () => {
+    const calories = parseInt(form.calories, 10);
+    if (!form.food.trim()) {
+      toast.error('Add a food item first');
+      return;
+    }
+    if (!calories || calories <= 0) {
+      toast.error('Enter a valid calorie amount');
+      return;
+    }
+
+    const nextEntries = [
+      ...entries,
+      {
+        id: Date.now(),
+        date: selectedDay,
+        meal: form.meal,
+        food: form.food.trim(),
+        calories,
+      }
+    ];
+
+    saveEntries(nextEntries);
+    setForm({ meal: 'breakfast', food: '', calories: '' });
+    toast.success('Meal added to calorie tracker');
+  };
+
+  const deleteEntry = (entryId) => {
+    saveEntries(entries.filter((entry) => entry.id !== entryId));
+  };
+
+  const groupedByDay = entries.reduce((acc, entry) => {
+    if (!acc[entry.date]) {
+      acc[entry.date] = [];
+    }
+    acc[entry.date].push(entry);
+    return acc;
+  }, {});
+
+  const currentDayEntries = (groupedByDay[selectedDay] || []).sort((a, b) => a.meal.localeCompare(b.meal));
+  const currentDayTotal = currentDayEntries.reduce((sum, entry) => sum + entry.calories, 0);
+  const trackedDays = Object.keys(groupedByDay);
+  const sortedTrackedDays = [...trackedDays].sort((a, b) => b.localeCompare(a));
+  const averageDailyCalories = trackedDays.length > 0
+    ? Math.round(
+        trackedDays.reduce((sum, day) => (
+          sum + groupedByDay[day].reduce((dayTotal, entry) => dayTotal + entry.calories, 0)
+        ), 0) / trackedDays.length
+      )
+    : 0;
+
+  const averageMealCalories = entries.length > 0
+    ? Math.round(entries.reduce((sum, entry) => sum + entry.calories, 0) / entries.length)
+    : 0;
+
+  const highestDay = trackedDays.reduce((best, day) => {
+    const total = groupedByDay[day].reduce((sum, entry) => sum + entry.calories, 0);
+    if (!best || total > best.total) {
+      return { day, total };
+    }
+    return best;
+  }, null);
+
+  return (
+    <div className="py-6 space-y-6">
+      <div className="grid gap-3 sm:grid-cols-3">
+        <div className={`border p-4 ${isPlayful ? 'rounded-2xl' : 'rounded-lg'}`}>
+          <p className="text-sm text-muted-foreground">Average Daily Calories</p>
+          <p className="mt-2 text-2xl font-bold">{averageDailyCalories}</p>
+        </div>
+        <div className={`border p-4 ${isPlayful ? 'rounded-2xl' : 'rounded-lg'}`}>
+          <p className="text-sm text-muted-foreground">Average Meal Entry</p>
+          <p className="mt-2 text-2xl font-bold">{averageMealCalories}</p>
+        </div>
+        <div className={`border p-4 ${isPlayful ? 'rounded-2xl' : 'rounded-lg'}`}>
+          <p className="text-sm text-muted-foreground">Highest Tracked Day</p>
+          <p className="mt-2 text-lg font-bold">{highestDay ? highestDay.total : 0}</p>
+          <p className="text-xs text-muted-foreground">
+            {highestDay ? new Date(`${highestDay.day}T00:00:00`).toLocaleDateString() : 'No data yet'}
+          </p>
+        </div>
+      </div>
+
+      <div className={`border p-4 ${isPlayful ? 'rounded-2xl' : 'rounded-lg'} space-y-4`}>
+        <div className="grid gap-3 sm:grid-cols-3">
+          <div>
+            <Label htmlFor="calorie-date">Day</Label>
+            <Input
+              id="calorie-date"
+              type="date"
+              value={selectedDay}
+              onChange={(event) => setSelectedDay(event.target.value)}
+              className="mt-1"
+            />
+          </div>
+          <div>
+            <Label>Meal</Label>
+            <Select value={form.meal} onValueChange={(value) => setForm((current) => ({ ...current, meal: value }))}>
+              <SelectTrigger className="mt-1">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="breakfast">Breakfast</SelectItem>
+                <SelectItem value="lunch">Lunch</SelectItem>
+                <SelectItem value="dinner">Dinner</SelectItem>
+                <SelectItem value="snack">Snack</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div>
+            <Label htmlFor="calorie-value">Calories</Label>
+            <Input
+              id="calorie-value"
+              type="number"
+              min="1"
+              value={form.calories}
+              onChange={(event) => setForm((current) => ({ ...current, calories: event.target.value }))}
+              className="mt-1"
+              placeholder="350"
+            />
+          </div>
+        </div>
+
+        <div>
+          <Label htmlFor="food-name">Food Item</Label>
+          <Input
+            id="food-name"
+            value={form.food}
+            onChange={(event) => setForm((current) => ({ ...current, food: event.target.value }))}
+            className="mt-1"
+            placeholder="Chicken wrap"
+          />
+        </div>
+
+        <Button onClick={addEntry} className={isPlayful ? 'rounded-full' : 'rounded-md'}>
+          <Plus className="mr-2 h-4 w-4" />
+          Add Meal
+        </Button>
+      </div>
+
+      <div className={`border p-4 ${isPlayful ? 'rounded-2xl' : 'rounded-lg'}`}>
+        <div className="mb-4 flex items-center justify-between">
+          <div>
+            <h3 className="text-lg font-bold">Daily Intake</h3>
+            <p className="text-sm text-muted-foreground">
+              {new Date(`${selectedDay}T00:00:00`).toLocaleDateString()}
+            </p>
+          </div>
+          <div className="text-right">
+            <p className="text-sm text-muted-foreground">Total</p>
+            <p className="text-2xl font-bold">{currentDayTotal} cal</p>
+          </div>
+        </div>
+
+        <div className="space-y-3">
+          {currentDayEntries.length === 0 ? (
+            <p className="py-6 text-center text-sm text-muted-foreground">
+              No meals tracked for this day yet.
+            </p>
+          ) : currentDayEntries.map((entry) => (
+            <div
+              key={entry.id}
+              className={`flex items-start justify-between border p-4 ${isPlayful ? 'rounded-2xl' : 'rounded-lg'}`}
+            >
+              <div>
+                <p className="font-semibold">{entry.food}</p>
+                <p className="text-sm text-muted-foreground capitalize">{entry.meal}</p>
+              </div>
+              <div className="flex items-center gap-3">
+                <p className="font-bold">{entry.calories} cal</p>
+                <Button variant="ghost" size="icon" onClick={() => deleteEntry(entry.id)}>
+                  <Trash2 className="h-4 w-4 text-destructive" />
+                </Button>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div className={`border p-4 ${isPlayful ? 'rounded-2xl' : 'rounded-lg'}`}>
+        <div className="mb-4">
+          <h3 className="text-lg font-bold">Past Records</h3>
+          <p className="text-sm text-muted-foreground">All tracked calorie days, newest first.</p>
+        </div>
+
+        <div className="max-h-[28rem] space-y-4 overflow-y-auto pr-2">
+          {sortedTrackedDays.length === 0 ? (
+            <p className="py-6 text-center text-sm text-muted-foreground">
+              No calorie history yet.
+            </p>
+          ) : sortedTrackedDays.map((day) => {
+            const dayEntries = [...groupedByDay[day]].sort((a, b) => a.meal.localeCompare(b.meal));
+            const dayTotal = dayEntries.reduce((sum, entry) => sum + entry.calories, 0);
+
+            return (
+              <div
+                key={day}
+                className={`border p-4 ${isPlayful ? 'rounded-2xl' : 'rounded-lg'}`}
+              >
+                <div className="mb-3 flex items-center justify-between">
+                  <div>
+                    <p className="font-semibold">{new Date(`${day}T00:00:00`).toLocaleDateString()}</p>
+                    <p className="text-sm text-muted-foreground">{dayEntries.length} entries</p>
+                  </div>
+                  <p className="text-lg font-bold">{dayTotal} cal</p>
+                </div>
+
+                <div className="space-y-2">
+                  {dayEntries.map((entry) => (
+                    <div
+                      key={entry.id}
+                      className="flex items-start justify-between rounded-xl bg-secondary/40 px-3 py-2"
+                    >
+                      <div>
+                        <p className="font-medium">{entry.food}</p>
+                        <p className="text-sm text-muted-foreground capitalize">{entry.meal}</p>
+                      </div>
+                      <p className="font-semibold">{entry.calories} cal</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            );
+          })}
         </div>
       </div>
     </div>

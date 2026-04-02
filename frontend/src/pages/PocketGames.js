@@ -13,6 +13,12 @@ import axios from 'axios';
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
 
+const WINNING_LINES = [
+  [0, 1, 2], [3, 4, 5], [6, 7, 8],
+  [0, 3, 6], [1, 4, 7], [2, 5, 8],
+  [0, 4, 8], [2, 4, 6]
+];
+
 export default function PocketGames() {
   const { user, token, refreshUser } = useAuth();
   const { theme } = useTheme();
@@ -76,16 +82,10 @@ export default function PocketGames() {
 // Tic-Tac-Toe Component
 function TicTacToe({ isPlayful, user, token, refreshUser }) {
   const [board, setBoard] = useState(Array(9).fill(null));
-  const [isXNext, setIsXNext] = useState(true);
   const [winner, setWinner] = useState(null);
 
   const calculateWinner = (squares) => {
-    const lines = [
-      [0, 1, 2], [3, 4, 5], [6, 7, 8],
-      [0, 3, 6], [1, 4, 7], [2, 5, 8],
-      [0, 4, 8], [2, 4, 6]
-    ];
-    for (let line of lines) {
+    for (let line of WINNING_LINES) {
       const [a, b, c] = line;
       if (squares[a] && squares[a] === squares[b] && squares[a] === squares[c]) {
         return squares[a];
@@ -94,36 +94,88 @@ function TicTacToe({ isPlayful, user, token, refreshUser }) {
     return null;
   };
 
+  const awardCoins = async (amount) => {
+    if (!user || !token) {
+      return;
+    }
+    try {
+      await axios.post(
+        `${API}/user/coins`,
+        { amount },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      await refreshUser();
+    } catch (error) {
+      console.error('Failed to award coins:', error);
+    }
+  };
+
+  const getBotMove = (squares) => {
+    const available = squares
+      .map((cell, index) => (cell ? null : index))
+      .filter((value) => value !== null);
+
+    const findWinningMove = (player) => {
+      for (const line of WINNING_LINES) {
+        const values = line.map((index) => squares[index]);
+        const playerCount = values.filter((value) => value === player).length;
+        const emptyIndex = line.find((index) => !squares[index]);
+        if (playerCount === 2 && emptyIndex !== undefined) {
+          return emptyIndex;
+        }
+      }
+      return null;
+    };
+
+    return (
+      findWinningMove('O')
+      ?? findWinningMove('X')
+      ?? (available.includes(4) ? 4 : null)
+      ?? [0, 2, 6, 8].find((index) => available.includes(index))
+      ?? available[0]
+    );
+  };
+
   const handleClick = async (index) => {
     if (board[index] || winner) return;
 
-    const newBoard = [...board];
-    newBoard[index] = isXNext ? 'X' : 'O';
-    setBoard(newBoard);
-    setIsXNext(!isXNext);
+    const playerBoard = [...board];
+    playerBoard[index] = 'X';
+    setBoard(playerBoard);
 
-    const gameWinner = calculateWinner(newBoard);
-    if (gameWinner) {
-      setWinner(gameWinner);
-      if (gameWinner === 'X' && user) {
-        toast.success('You won! +5 coins');
-        try {
-          await axios.patch(
-            `${API}/user/profile`,
-            { coins: user.coins + 5 },
-            { headers: { Authorization: `Bearer ${token}` } }
-          );
-          await refreshUser();
-        } catch (error) {
-          console.error('Failed to award coins:', error);
-        }
-      }
+    const playerWinner = calculateWinner(playerBoard);
+    if (playerWinner) {
+      setWinner(playerWinner);
+      toast.success('You won! +5 coins');
+      await awardCoins(5);
+      return;
+    }
+
+    if (playerBoard.every(Boolean)) {
+      setWinner('draw');
+      return;
+    }
+
+    const botMove = getBotMove(playerBoard);
+    if (botMove === null || botMove === undefined) {
+      setWinner('draw');
+      return;
+    }
+
+    const botBoard = [...playerBoard];
+    botBoard[botMove] = 'O';
+    setBoard(botBoard);
+
+    const botWinner = calculateWinner(botBoard);
+    if (botWinner) {
+      setWinner(botWinner);
+    } else if (botBoard.every(Boolean)) {
+      setWinner('draw');
     }
   };
 
   const resetGame = () => {
     setBoard(Array(9).fill(null));
-    setIsXNext(true);
     setWinner(null);
   };
 
@@ -147,7 +199,7 @@ function TicTacToe({ isPlayful, user, token, refreshUser }) {
       {winner && (
         <div className="text-center mb-4">
           <p className="text-xl font-bold">
-            {winner === 'X' ? '🎉 You Won!' : 'Computer Won!'}
+            {winner === 'X' ? '🎉 You Won!' : winner === 'draw' ? 'It\'s a draw!' : 'Computer Won!'}
           </p>
         </div>
       )}
@@ -165,8 +217,35 @@ function TicTacToe({ isPlayful, user, token, refreshUser }) {
 function ChessGame({ isPlayful, user, token, refreshUser }) {
   const [game, setGame] = useState(new Chess());
   const [gamePosition, setGamePosition] = useState(game.fen());
+  const [boardWidth, setBoardWidth] = useState(380);
 
-  function onDrop(sourceSquare, targetSquare) {
+  useEffect(() => {
+    const updateBoardWidth = () => {
+      setBoardWidth(Math.max(260, Math.min(400, window.innerWidth - 48)));
+    };
+
+    updateBoardWidth();
+    window.addEventListener('resize', updateBoardWidth);
+    return () => window.removeEventListener('resize', updateBoardWidth);
+  }, []);
+
+  const awardCoins = async (amount) => {
+    if (!user || !token) {
+      return;
+    }
+    try {
+      await axios.post(
+        `${API}/user/coins`,
+        { amount },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      await refreshUser();
+    } catch (error) {
+      console.error('Failed to award coins:', error);
+    }
+  };
+
+  function onDrop({ sourceSquare, targetSquare }) {
     const gameCopy = new Chess(game.fen());
     
     try {
@@ -183,13 +262,7 @@ function ChessGame({ isPlayful, user, token, refreshUser }) {
       
       if (gameCopy.isCheckmate()) {
         toast.success('Checkmate! +10 coins');
-        if (user && token && refreshUser) {
-          axios.patch(
-            `${API}/user/profile`,
-            { coins: user.coins + 10 },
-            { headers: { Authorization: `Bearer ${token}` } }
-          ).then(() => refreshUser()).catch(console.error);
-        }
+        awardCoins(10);
       }
 
       return true;
@@ -208,12 +281,16 @@ function ChessGame({ isPlayful, user, token, refreshUser }) {
     <div className="py-6">
       <div className="max-w-md mx-auto mb-4">
         <Chessboard
-          position={gamePosition}
-          onPieceDrop={onDrop}
-          boardWidth={Math.min(400, window.innerWidth - 100)}
-          customBoardStyle={{
-            borderRadius: isPlayful ? '1.5rem' : '0.5rem',
-            boxShadow: '0 2px 10px rgba(0, 0, 0, 0.3)'
+          options={{
+            id: 'accountable-chessboard',
+            position: gamePosition,
+            onPieceDrop: onDrop,
+            boardStyle: {
+              width: `${boardWidth}px`,
+              maxWidth: '100%',
+              borderRadius: isPlayful ? '1.5rem' : '0.5rem',
+              boxShadow: '0 2px 10px rgba(0, 0, 0, 0.3)'
+            }
           }}
         />
       </div>

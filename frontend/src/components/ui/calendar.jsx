@@ -1,132 +1,109 @@
-import * as React from 'react';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
+import { useMemo, useState } from 'react';
 
+import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
-import { buttonVariants } from '@/components/ui/button';
 
-function startOfMonth(date) {
-  return new Date(date.getFullYear(), date.getMonth(), 1);
-}
+const WEEKDAY_LABELS = ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'];
 
-function endOfMonth(date) {
-  return new Date(date.getFullYear(), date.getMonth() + 1, 0);
-}
+const startOfMonth = (date) => new Date(date.getFullYear(), date.getMonth(), 1);
+const endOfMonth = (date) => new Date(date.getFullYear(), date.getMonth() + 1, 0);
+const addMonths = (date, amount) => new Date(date.getFullYear(), date.getMonth() + amount, 1);
+const isSameDay = (a, b) => (
+  a.getFullYear() === b.getFullYear()
+  && a.getMonth() === b.getMonth()
+  && a.getDate() === b.getDate()
+);
 
-function sameDay(a, b) {
-  return a && b
-    && a.getFullYear() === b.getFullYear()
-    && a.getMonth() === b.getMonth()
-    && a.getDate() === b.getDate();
-}
+const buildMonthGrid = (monthDate) => {
+  const monthStart = startOfMonth(monthDate);
+  const monthEnd = endOfMonth(monthDate);
+  const gridStart = new Date(monthStart);
+  gridStart.setDate(monthStart.getDate() - monthStart.getDay());
 
-function Calendar({
-  className,
+  const gridEnd = new Date(monthEnd);
+  gridEnd.setDate(monthEnd.getDate() + (6 - monthEnd.getDay()));
+
+  const days = [];
+  for (let cursor = new Date(gridStart); cursor <= gridEnd; cursor.setDate(cursor.getDate() + 1)) {
+    days.push(new Date(cursor));
+  }
+  return days;
+};
+
+export function Calendar({
   selected,
   onSelect,
+  className,
   modifiers = {},
   modifiersStyles = {},
 }) {
-  const initialMonth = selected ? startOfMonth(selected) : startOfMonth(new Date());
-  const [visibleMonth, setVisibleMonth] = React.useState(initialMonth);
+  const [currentMonth, setCurrentMonth] = useState(selected || new Date());
 
-  React.useEffect(() => {
-    if (selected) {
-      setVisibleMonth(startOfMonth(selected));
-    }
-  }, [selected]);
+  const days = useMemo(() => buildMonthGrid(currentMonth), [currentMonth]);
 
-  const monthStart = startOfMonth(visibleMonth);
-  const monthEnd = endOfMonth(visibleMonth);
-  const startWeekday = monthStart.getDay();
-  const totalDays = monthEnd.getDate();
-  const cells = [];
-
-  for (let i = 0; i < startWeekday; i += 1) {
-    cells.push(null);
-  }
-
-  for (let day = 1; day <= totalDays; day += 1) {
-    cells.push(new Date(visibleMonth.getFullYear(), visibleMonth.getMonth(), day));
-  }
-
-  while (cells.length % 7 !== 0) {
-    cells.push(null);
-  }
-
-  const weeks = [];
-  for (let i = 0; i < cells.length; i += 7) {
-    weeks.push(cells.slice(i, i + 7));
-  }
-
-  const weekdayLabels = ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'];
+  const getModifierStyle = (day) => {
+    return Object.entries(modifiers).reduce((acc, [modifierName, matcher]) => {
+      if (typeof matcher === 'function' && matcher(day)) {
+        return { ...acc, ...(modifiersStyles[modifierName] || {}) };
+      }
+      return acc;
+    }, {});
+  };
 
   return (
-    <div className={cn('w-full max-w-sm rounded-xl border p-3', className)}>
-      <div className="mb-3 flex items-center justify-between">
-        <button
+    <div className={cn('w-full max-w-sm bg-card p-4 shadow-sm', className)}>
+      <div className="mb-4 flex items-center justify-between">
+        <Button
           type="button"
-          onClick={() => setVisibleMonth(new Date(visibleMonth.getFullYear(), visibleMonth.getMonth() - 1, 1))}
-          className={cn(buttonVariants({ variant: 'outline' }), 'h-8 w-8 p-0')}
+          variant="ghost"
+          size="icon"
+          onClick={() => setCurrentMonth((prev) => addMonths(prev, -1))}
         >
           <ChevronLeft className="h-4 w-4" />
-        </button>
-        <div className="text-sm font-medium">
-          {visibleMonth.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
-        </div>
-        <button
+        </Button>
+        <h3 className="text-lg font-semibold">
+          {currentMonth.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
+        </h3>
+        <Button
           type="button"
-          onClick={() => setVisibleMonth(new Date(visibleMonth.getFullYear(), visibleMonth.getMonth() + 1, 1))}
-          className={cn(buttonVariants({ variant: 'outline' }), 'h-8 w-8 p-0')}
+          variant="ghost"
+          size="icon"
+          onClick={() => setCurrentMonth((prev) => addMonths(prev, 1))}
         >
           <ChevronRight className="h-4 w-4" />
-        </button>
+        </Button>
       </div>
 
-      <div className="grid grid-cols-7 gap-1 text-center text-xs text-muted-foreground">
-        {weekdayLabels.map((label) => (
-          <div key={label} className="py-1">{label}</div>
+      <div className="grid grid-cols-7 gap-1 text-center text-xs font-semibold text-muted-foreground">
+        {WEEKDAY_LABELS.map((label) => (
+          <div key={label} className="py-2">{label}</div>
         ))}
       </div>
 
-      <div className="mt-1 grid gap-1">
-        {weeks.map((week, weekIndex) => (
-          <div key={weekIndex} className="grid grid-cols-7 gap-1">
-            {week.map((date, dayIndex) => {
-              if (!date) {
-                return <div key={`${weekIndex}-${dayIndex}`} className="h-9" />;
-              }
+      <div className="grid grid-cols-7 gap-1">
+        {days.map((day) => {
+          const isCurrentMonth = day.getMonth() === currentMonth.getMonth();
+          const isSelected = selected ? isSameDay(day, selected) : false;
+          const customStyle = getModifierStyle(day);
 
-              const isSelected = sameDay(date, selected);
-              const inlineStyle = {};
-              Object.entries(modifiers).forEach(([name, matcher]) => {
-                if (typeof matcher === 'function' && matcher(date)) {
-                  Object.assign(inlineStyle, modifiersStyles[name] || {});
-                }
-              });
-
-              return (
-                <button
-                  key={date.toISOString()}
-                  type="button"
-                  onClick={() => onSelect?.(date)}
-                  style={inlineStyle}
-                  className={cn(
-                    buttonVariants({ variant: 'ghost' }),
-                    'h-9 w-full p-0 text-sm font-normal',
-                    isSelected && 'bg-primary text-primary-foreground hover:bg-primary hover:text-primary-foreground'
-                  )}
-                >
-                  {date.getDate()}
-                </button>
-              );
-            })}
-          </div>
-        ))}
+          return (
+            <button
+              key={day.toISOString()}
+              type="button"
+              onClick={() => onSelect?.(day)}
+              className={cn(
+                'flex h-10 items-center justify-center rounded-xl text-sm transition-colors',
+                isCurrentMonth ? 'text-foreground' : 'text-muted-foreground/50',
+                isSelected ? 'bg-primary text-primary-foreground shadow-sm' : 'hover:bg-secondary'
+              )}
+              style={customStyle}
+            >
+              {day.getDate()}
+            </button>
+          );
+        })}
       </div>
     </div>
   );
 }
-
-Calendar.displayName = 'Calendar';
-
-export { Calendar };

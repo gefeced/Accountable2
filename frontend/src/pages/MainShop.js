@@ -38,6 +38,7 @@ export default function MainShop() {
   const [activePreviews, setActivePreviews] = useState({});
   const [previewTimers, setPreviewTimers] = useState({});
   const [ownedItemIds, setOwnedItemIds] = useState([]);
+  const [inventoryCounts, setInventoryCounts] = useState({});
   const timerIntervalRef = useRef(null);
 
   const selectedSector = searchParams.get('sector') || 'all';
@@ -120,7 +121,14 @@ export default function MainShop() {
       const response = await axios.get(`${API}/inventory`, {
         headers: { Authorization: `Bearer ${token}` }
       });
-      setOwnedItemIds((response.data.items || []).map((item) => item.id));
+      const items = response.data.items || [];
+      setOwnedItemIds(items.filter((item) => item.type !== 'powerup').map((item) => item.id));
+      setInventoryCounts(
+        items.reduce((acc, item) => {
+          acc[item.id] = item.quantity || 1;
+          return acc;
+        }, {})
+      );
     } catch (error) {
       console.error('Failed to fetch inventory:', error);
     }
@@ -297,10 +305,10 @@ export default function MainShop() {
 
                 <Button
                   onClick={() => handlePurchase(previewingItem)}
-                  disabled={ownedItemIds.includes(previewingItem.id) || user.coins < previewingItem.cost}
+                  disabled={(previewingItem.type !== 'powerup' && ownedItemIds.includes(previewingItem.id)) || user.coins < previewingItem.cost}
                   className={`w-full ${isPlayful ? 'rounded-full' : 'rounded-md'}`}
                 >
-                  {ownedItemIds.includes(previewingItem.id) ? 'Already Owned' : 'Purchase Now'}
+                  {previewingItem.type !== 'powerup' && ownedItemIds.includes(previewingItem.id) ? 'Already Owned' : 'Purchase Now'}
                 </Button>
               </motion.div>
             </motion.div>
@@ -321,6 +329,7 @@ export default function MainShop() {
                   const isOwned = ownedItemIds.includes(item.id);
                   const previewActive = activePreviews[item.id] && previewTimers[item.id] > 0;
                   const canPreview = item.type !== 'powerup';
+                  const quantity = inventoryCounts[item.id] || 0;
                   return (
                     <motion.div
                       key={item.id}
@@ -334,6 +343,11 @@ export default function MainShop() {
                             <span className="rounded-full bg-secondary px-2 py-1 text-xs font-medium">
                               {item.sector}
                             </span>
+                            {item.type === 'powerup' && quantity > 0 ? (
+                              <span className="rounded-full bg-primary/10 px-2 py-1 text-xs font-semibold text-primary">
+                                x{quantity}
+                              </span>
+                            ) : null}
                           </div>
                           <p className="text-sm text-muted-foreground mb-3">{item.description}</p>
                           <div className="flex items-center gap-2">
@@ -347,11 +361,11 @@ export default function MainShop() {
                       <div className="space-y-2">
                         <Button
                           onClick={() => handlePurchase(item)}
-                          disabled={isOwned || purchasing === item.id || user.coins < item.cost}
+                          disabled={((item.type !== 'powerup' && isOwned) || purchasing === item.id || user.coins < item.cost)}
                           className={`w-full ${isPlayful ? 'rounded-full' : 'rounded-md'}`}
                         >
                           <ShoppingCart className="w-4 h-4 mr-2" />
-                          {isOwned ? 'Already Owned' : purchasing === item.id ? 'Purchasing...' : 'Purchase'}
+                          {item.type !== 'powerup' && isOwned ? 'Already Owned' : purchasing === item.id ? 'Purchasing...' : item.type === 'powerup' && quantity > 0 ? 'Buy Another' : 'Purchase'}
                         </Button>
 
                         {canPreview ? (

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
-import { ArrowLeft, Package, Check, Music, Palette, PawPrint, Trophy } from 'lucide-react';
+import { ArrowLeft, Package, Check, Music, Palette, PawPrint, Trophy, Sparkles } from 'lucide-react';
 
 import { useAuth } from '@/contexts/AuthContext';
 import { useTheme } from '@/contexts/ThemeContext';
@@ -72,10 +72,11 @@ export default function Inventory() {
     if (type === 'theme') return <Palette className="w-5 h-5 text-primary" />;
     if (type === 'pet') return <PawPrint className="w-5 h-5 text-primary" />;
     if (type === 'music') return <Music className="w-5 h-5 text-primary" />;
+    if (type === 'powerup') return <Sparkles className="w-5 h-5 text-primary" />;
     return <Trophy className="w-5 h-5 text-primary" />;
   };
 
-  const canEquip = (item) => ['theme', 'pet', 'music'].includes(item.type) || (item.type === 'tool' && item.name === 'Music Player');
+  const canEquip = (item) => ['theme', 'pet', 'music', 'powerup'].includes(item.type) || (item.type === 'tool' && item.name === 'Music Player');
 
   return (
     <div className="min-h-screen pb-24">
@@ -128,6 +129,9 @@ export default function Inventory() {
                     </div>
                     <p className="text-sm text-muted-foreground">{item.description}</p>
                     <p className="mt-2 text-xs uppercase tracking-wide text-muted-foreground">{item.type}</p>
+                    {item.type === 'powerup' ? (
+                      <p className="mt-1 text-sm font-medium text-primary">Quantity: {item.quantity || 0}</p>
+                    ) : null}
                   </div>
                 </div>
 
@@ -139,7 +143,7 @@ export default function Inventory() {
                     className={isPlayful ? 'rounded-full' : 'rounded-md'}
                   >
                     {item.equipped ? <Check className="w-4 h-4 mr-2" /> : null}
-                    {updatingId === item.id ? 'Saving...' : item.equipped ? 'Unequip' : 'Equip'}
+                    {updatingId === item.id ? 'Saving...' : item.type === 'powerup' ? (item.equipped ? 'Deactivate' : 'Activate') : item.equipped ? 'Unequip' : 'Equip'}
                   </Button>
                 ) : (
                   <span className="text-sm text-muted-foreground">Owned</span>

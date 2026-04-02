@@ -2,8 +2,8 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTheme } from '@/contexts/ThemeContext';
-import { motion, AnimatePresence } from 'framer-motion';
-import { Sparkles, Coins, Flame, TrendingUp, Lock, Settings, Trophy, ChevronDown, ChevronUp, Award, ShoppingBag, Package } from 'lucide-react';
+import { motion } from 'framer-motion';
+import { Sparkles, Coins, Flame, TrendingUp, Settings, Trophy, Award, ShoppingBag, Package } from 'lucide-react';
 import { Progress } from '@/components/ui/progress';
 import { Button } from '@/components/ui/button';
 
@@ -16,18 +16,37 @@ const sectors = [
   { id: 'faith', name: 'Faith', icon: '🙏', active: true }
 ];
 
+const CORE_SECTORS = ['chores', 'fitness', 'learning', 'cooking'];
+const OPTIONAL_SECTORS = ['mind', 'faith'];
+
 export default function Dashboard() {
   const { user, loading } = useAuth();
   const { theme } = useTheme();
   const navigate = useNavigate();
   const isPlayful = theme === 'playful';
-  const [coinsExpanded, setCoinsExpanded] = useState(false);
+  const [enabledExtraSectors, setEnabledExtraSectors] = useState(() => {
+    const saved = localStorage.getItem('accountable-extra-sectors');
+    if (!saved) {
+      return [];
+    }
+    try {
+      const parsed = JSON.parse(saved);
+      return Array.isArray(parsed) ? parsed.filter((value) => OPTIONAL_SECTORS.includes(value)) : [];
+    } catch (error) {
+      return [];
+    }
+  });
+  const [showExplorePanel, setShowExplorePanel] = useState(false);
 
   useEffect(() => {
     if (!loading && !user) {
       navigate('/login');
     }
   }, [user, loading, navigate]);
+
+  useEffect(() => {
+    localStorage.setItem('accountable-extra-sectors', JSON.stringify(enabledExtraSectors));
+  }, [enabledExtraSectors]);
 
   if (loading || !user) {
     return (
@@ -39,6 +58,17 @@ export default function Dashboard() {
 
   const xpForNextLevel = Math.pow((user.accountable_level), 2) * 100;
   const xpProgress = (user.accountable_xp % xpForNextLevel) / xpForNextLevel * 100;
+  const visibleSectors = sectors.filter((sector) => (
+    CORE_SECTORS.includes(sector.id) || enabledExtraSectors.includes(sector.id)
+  ));
+
+  const handleToggleExtraSector = (sectorId) => {
+    setEnabledExtraSectors((current) => (
+      current.includes(sectorId)
+        ? current.filter((value) => value !== sectorId)
+        : [...current, sectorId]
+    ));
+  };
 
   return (
     <div className="min-h-screen pb-24">
@@ -86,7 +116,7 @@ export default function Dashboard() {
             </p>
           </div>
 
-          {/* Coins Card with Expandable Breakdown */}
+          {/* Coins Card */}
           <motion.div
             whileHover={isPlayful ? { scale: 1.05 } : {}}
             className={`col-span-2 bg-card p-6 border ${isPlayful ? 'playful-border playful-shadow rounded-[1.5rem]' : 'clean-border clean-shadow rounded-lg'}`}
@@ -100,53 +130,8 @@ export default function Dashboard() {
                   <p className="text-3xl font-bold text-foreground">{user.coins}</p>
                 </div>
               </div>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => setCoinsExpanded(!coinsExpanded)}
-                className={isPlayful ? 'rounded-full' : 'rounded-md'}
-                data-testid="expand-coins-button"
-              >
-                {coinsExpanded ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
-              </Button>
+              <Coins className="w-8 h-8 text-accent/70" />
             </div>
-            
-            <AnimatePresence>
-              {coinsExpanded && (
-                <motion.div
-                  initial={{ height: 0, opacity: 0 }}
-                  animate={{ height: 'auto', opacity: 1 }}
-                  exit={{ height: 0, opacity: 0 }}
-                  transition={{ duration: 0.3 }}
-                  className="mt-4 pt-4 border-t space-y-3 overflow-hidden"
-                >
-                  <div className="flex justify-between items-center">
-                    <span className="text-sm text-muted-foreground">Chore Coins</span>
-                    <span className="text-lg font-bold text-foreground">{user.chores_coins}</span>
-                  </div>
-                  <div className="flex justify-between items-center">
-                    <span className="text-sm text-muted-foreground">Fitness Coins</span>
-                    <span className="text-lg font-bold text-foreground">{user.fitness_coins}</span>
-                  </div>
-                  <div className="flex justify-between items-center">
-                    <span className="text-sm text-muted-foreground">Learning Coins</span>
-                    <span className="text-lg font-bold text-foreground">{user.learning_coins}</span>
-                  </div>
-                  <div className="flex justify-between items-center">
-                    <span className="text-sm text-muted-foreground">Cooking Coins</span>
-                    <span className="text-lg font-bold text-foreground">{user.cooking_coins}</span>
-                  </div>
-                  <div className="flex justify-between items-center">
-                    <span className="text-sm text-muted-foreground">Mind Coins</span>
-                    <span className="text-lg font-bold text-foreground">{user.mind_coins}</span>
-                  </div>
-                  <div className="flex justify-between items-center">
-                    <span className="text-sm text-muted-foreground">Faith Coins</span>
-                    <span className="text-lg font-bold text-foreground">{user.faith_coins}</span>
-                  </div>
-                </motion.div>
-              )}
-            </AnimatePresence>
           </motion.div>
 
           {/* Streak Card */}
@@ -215,9 +200,44 @@ export default function Dashboard() {
 
         {/* Sectors */}
         <div>
-          <h2 className="text-2xl font-bold mb-4">Sectors</h2>
+          <div className="mb-4 flex items-center justify-between gap-3">
+            <h2 className="text-2xl font-bold">Sectors</h2>
+            <Button
+              variant="outline"
+              onClick={() => setShowExplorePanel((current) => !current)}
+              className={isPlayful ? 'rounded-full' : 'rounded-md'}
+            >
+              Explore More Sectors
+            </Button>
+          </div>
+
+          {showExplorePanel ? (
+            <div className={`mb-4 border p-4 ${isPlayful ? 'rounded-[1.5rem]' : 'rounded-lg'}`}>
+              <p className="mb-3 text-sm text-muted-foreground">
+                Enable or hide the optional sectors on your dashboard.
+              </p>
+              <div className="flex flex-wrap gap-2">
+                {OPTIONAL_SECTORS.map((sectorId) => {
+                  const sector = sectors.find((item) => item.id === sectorId);
+                  const enabled = enabledExtraSectors.includes(sectorId);
+                  return (
+                    <Button
+                      key={sectorId}
+                      variant={enabled ? 'default' : 'outline'}
+                      onClick={() => handleToggleExtraSector(sectorId)}
+                      className={isPlayful ? 'rounded-full' : 'rounded-md'}
+                    >
+                      <span className="mr-2">{sector.icon}</span>
+                      {enabled ? `Hide ${sector.name}` : `Show ${sector.name}`}
+                    </Button>
+                  );
+                })}
+              </div>
+            </div>
+          ) : null}
+
           <div className="grid grid-cols-2 gap-4">
-            {sectors.map((sector) => (
+            {visibleSectors.map((sector) => (
               <motion.div
                 key={sector.id}
                 whileHover={sector.active && isPlayful ? { scale: 1.05 } : {}}
@@ -232,16 +252,8 @@ export default function Dashboard() {
                 }`}
                 data-testid={`sector-${sector.id}`}
               >
-                {!sector.active && (
-                  <div className="absolute top-2 right-2">
-                    <Lock className="w-5 h-5 text-muted-foreground" />
-                  </div>
-                )}
                 <div className="text-4xl mb-2">{sector.icon}</div>
                 <p className="font-bold text-lg">{sector.name}</p>
-                {!sector.active && (
-                  <p className="text-xs text-muted-foreground mt-1">Coming Soon</p>
-                )}
               </motion.div>
             ))}
           </div>
@@ -270,6 +282,16 @@ export default function Dashboard() {
             >
               <div className="text-4xl mb-2">🔢</div>
               <p className="font-bold text-lg">Calculator</p>
+            </motion.div>
+            <motion.div
+              whileHover={isPlayful ? { scale: 1.05 } : {}}
+              whileTap={{ scale: 0.95 }}
+              onClick={() => navigate('/tools?tab=calories')}
+              className={`bg-card p-6 border cursor-pointer ${isPlayful ? 'playful-border playful-shadow rounded-[1.5rem]' : 'clean-border clean-shadow rounded-lg'} text-center hover:bg-secondary/50 transition-colors`}
+              data-testid="tool-calories"
+            >
+              <div className="text-4xl mb-2">🔥</div>
+              <p className="font-bold text-lg">Calorie Tracker</p>
             </motion.div>
           </div>
         </div>

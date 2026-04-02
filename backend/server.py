@@ -106,6 +106,7 @@ class User(BaseModel):
     equipped_pet_item_id: Optional[str] = None
     equipped_music_item_id: Optional[str] = None
     music_player_enabled: bool = False
+    active_powerups: Dict[str, str] = Field(default_factory=dict)
 
 class ActivityCreate(BaseModel):
     title: str
@@ -198,6 +199,10 @@ class InventoryEquipRequest(BaseModel):
 class ResetProgressRequest(BaseModel):
     code: str
 
+
+class CoinsAwardRequest(BaseModel):
+    amount: int
+
 # Helper functions
 def hash_password(password: str) -> str:
     return bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
@@ -232,6 +237,22 @@ def calculate_level(xp: int) -> int:
 
 def calculate_xp_for_duration(duration_seconds: int) -> int:
     return max(10, duration_seconds // 60)
+
+
+SECTOR_XP_MULTIPLIERS = {
+    "chores": 1.0,
+    "learning": 1.0,
+    "cooking": 0.7,
+    "fitness": 0.65,
+    "mind": 0.55,
+    "faith": 0.5,
+}
+
+
+def calculate_sector_xp(duration_seconds: int, sector: str) -> int:
+    base_xp = calculate_xp_for_duration(duration_seconds)
+    multiplier = SECTOR_XP_MULTIPLIERS.get(sector, 1.0)
+    return max(10, int(round(base_xp * multiplier)))
 
 
 def normalize_chore_templates(templates: List[str]) -> List[str]:
@@ -289,6 +310,7 @@ def build_reset_user_state(current_user: User) -> Dict[str, Any]:
         "equipped_pet_item_id": None,
         "equipped_music_item_id": None,
         "music_player_enabled": False,
+        "active_powerups": {},
     }
 
 async def check_achievements(user: User) -> List[str]:
@@ -351,6 +373,7 @@ async def register(user_data: UserRegister):
         "equipped_pet_item_id": None,
         "equipped_music_item_id": None,
         "music_player_enabled": False,
+        "active_powerups": {},
     }
     
     await db.users.insert_one(user_doc)
@@ -390,6 +413,19 @@ async def update_profile_picture(
         {"$set": {"profile_picture": payload.profile_picture}},
     )
     return {"success": True, "profile_picture": payload.profile_picture}
+
+
+@api_router.post("/user/coins")
+async def award_coins(
+    payload: CoinsAwardRequest,
+    current_user: User = Depends(get_current_user),
+):
+    if payload.amount <= 0:
+        raise HTTPException(status_code=400, detail="Amount must be positive")
+
+    new_coins = current_user.coins + payload.amount
+    await db.users.update_one({"id": current_user.id}, {"$set": {"coins": new_coins}})
+    return {"success": True, "coins": new_coins}
 
 
 @api_router.post("/user/reset-progress")
@@ -444,8 +480,10 @@ async def create_activity(activity_data: ActivityCreate, current_user: User = De
         raise HTTPException(status_code=400, detail="Invalid sector")
     
     activity_meta = activity_data.activity_meta or {}
-    xp_earned = calculate_xp_for_duration(activity_data.duration)
+    xp_earned = calculate_sector_xp(activity_data.duration, activity_data.sector)
     coins_earned = xp_earned // 2
+    active_powerups = current_user.active_powerups or {}
+    active_powerup_id = active_powerups.get(activity_data.sector)
     chores_streak = current_user.chores_streak
     last_chores_date = current_user.last_chores_date
 
@@ -460,12 +498,22 @@ async def create_activity(activity_data: ActivityCreate, current_user: User = De
         activity_meta = {
             **activity_meta,
             "completed_chores": completed_chores,
-            "time_xp": calculate_xp_for_duration(activity_data.duration),
+            "time_xp": calculate_sector_xp(activity_data.duration, activity_data.sector),
             "chore_xp": chore_xp,
             "daily_bonus_xp": daily_bonus,
             "base_xp": xp_earned,
             "multipliers": activity_meta.get("multipliers") or [],
         }
+
+    if active_powerup_id:
+        active_powerup_item = await db.shop_items.find_one({"id": active_powerup_id}, {"_id": 0})
+        if active_powerup_item and active_powerup_item.get("type") == "powerup":
+            xp_earned = xp_earned * 2
+            activity_meta = {
+                **activity_meta,
+                "powerup_applied": active_powerup_item["name"],
+                "powerup_multiplier": 2,
+            }
     
     activity_id = str(uuid.uuid4())
     activity_doc = {
@@ -531,6 +579,16 @@ async def create_activity(activity_data: ActivityCreate, current_user: User = De
         update_doc["last_chores_date"] = today.isoformat()
     
     await db.users.update_one({"id": current_user.id}, {"$set": update_doc})
+
+    if active_powerup_id:
+        await db.user_inventory.find_one_and_delete(
+            {"user_id": current_user.id, "item_id": active_powerup_id},
+            sort=[("purchased_at", 1)],
+        )
+        await db.users.update_one(
+            {"id": current_user.id},
+            {"$unset": {f"active_powerups.{activity_data.sector}": ""}},
+        )
     
     updated_user = await db.users.find_one({"id": current_user.id}, {"_id": 0, "password": 0})
     new_achievements = await check_achievements(User(**updated_user))
@@ -687,12 +745,13 @@ async def purchase_item(purchase: PurchaseRequest, current_user: User = Depends(
     if not item:
         raise HTTPException(status_code=404, detail="Item not found")
 
-    existing_inventory = await db.user_inventory.find_one(
-        {"user_id": current_user.id, "item_id": purchase.item_id},
-        {"_id": 0}
-    )
-    if existing_inventory:
-        raise HTTPException(status_code=400, detail="You already own this item")
+    if item["type"] != "powerup":
+        existing_inventory = await db.user_inventory.find_one(
+            {"user_id": current_user.id, "item_id": purchase.item_id},
+            {"_id": 0}
+        )
+        if existing_inventory:
+            raise HTTPException(status_code=400, detail="You already own this item")
     
     coin_field = "coins"
     user_coins = current_user.coins
@@ -758,6 +817,10 @@ async def get_inventory(current_user: User = Depends(get_current_user)):
         if item_id not in seen_item_ids:
             seen_item_ids.append(item_id)
 
+    item_quantities = {}
+    for row in inventory_rows:
+        item_quantities[row["item_id"]] = item_quantities.get(row["item_id"], 0) + 1
+
     items = []
     for item_id in seen_item_ids:
         item = await db.shop_items.find_one({"id": item_id}, {"_id": 0})
@@ -773,10 +836,13 @@ async def get_inventory(current_user: User = Depends(get_current_user)):
             equipped = current_user.equipped_music_item_id == item_id
         elif item["type"] == "tool" and item["name"] == "Music Player":
             equipped = current_user.music_player_enabled
+        elif item["type"] == "powerup":
+            equipped = (current_user.active_powerups or {}).get(item["sector"]) == item_id
 
         items.append({
             **item,
             "equipped": equipped,
+            "quantity": item_quantities.get(item_id, 1),
         })
 
     return {"items": items}
@@ -810,6 +876,18 @@ async def equip_inventory_item(
         if not current_user.music_player_owned:
             raise HTTPException(status_code=400, detail="You do not own the Music Player")
         update_doc["music_player_enabled"] = payload.equipped
+    elif item["type"] == "powerup":
+        quantity = await db.user_inventory.count_documents({"user_id": current_user.id, "item_id": payload.item_id})
+        if quantity <= 0:
+            raise HTTPException(status_code=400, detail="You do not own this powerup")
+        if payload.equipped:
+            update_doc[f"active_powerups.{item['sector']}"] = payload.item_id
+        else:
+            await db.users.update_one(
+                {"id": current_user.id},
+                {"$unset": {f"active_powerups.{item['sector']}": ""}},
+            )
+            return {"success": True}
     else:
         raise HTTPException(status_code=400, detail="This item cannot be equipped")
 
