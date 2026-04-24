@@ -8,6 +8,7 @@ import { toast } from 'sonner';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTheme } from '@/contexts/ThemeContext';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
@@ -39,6 +40,8 @@ export default function MainShop() {
   const [previewTimers, setPreviewTimers] = useState({});
   const [ownedItemIds, setOwnedItemIds] = useState([]);
   const [inventoryCounts, setInventoryCounts] = useState({});
+  const [promoCode, setPromoCode] = useState('');
+  const [redeemingPromo, setRedeemingPromo] = useState(false);
   const timerIntervalRef = useRef(null);
 
   const selectedSector = searchParams.get('sector') || 'all';
@@ -195,6 +198,50 @@ export default function MainShop() {
     }
   };
 
+  const handleRedeemPromoCode = async () => {
+    const normalizedCode = promoCode.trim();
+    if (!normalizedCode) {
+      toast.error('Enter a promo code first.');
+      return;
+    }
+
+    setRedeemingPromo(true);
+    try {
+      const response = await axios.post(
+        `${API}/shop/promo-codes/redeem`,
+        { code: normalizedCode },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+
+      const { granted_xp, granted_coins, granted_items, skipped_items } = response.data;
+      const rewardParts = [];
+      if (granted_xp > 0) {
+        rewardParts.push(`${granted_xp} XP`);
+      }
+      if (granted_coins > 0) {
+        rewardParts.push(`${granted_coins} coins`);
+      }
+      if (granted_items?.length) {
+        rewardParts.push(granted_items.join(', '));
+      }
+      toast.success(
+        rewardParts.length
+          ? `Promo code redeemed: ${rewardParts.join(' + ')}`
+          : 'Promo code redeemed.'
+      );
+      if (skipped_items?.length) {
+        toast.info(`Already owned: ${skipped_items.join(', ')}`);
+      }
+      setPromoCode('');
+      await refreshUser();
+      await fetchInventory();
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'Promo code redemption failed');
+    } finally {
+      setRedeemingPromo(false);
+    }
+  };
+
   const formatTime = (seconds) => {
     const mins = Math.floor(seconds / 60);
     const secs = seconds % 60;
@@ -250,6 +297,32 @@ export default function MainShop() {
               <p className="text-4xl font-bold">{user.coins}</p>
             </div>
             <Coins className="w-12 h-12 opacity-80" />
+          </div>
+        </div>
+
+        <div className={`bg-card border p-5 ${isPlayful ? 'playful-border playful-shadow rounded-[1.5rem]' : 'clean-border clean-shadow rounded-lg'}`}>
+          <div className="flex flex-col gap-4 md:flex-row md:items-end">
+            <div className="flex-1">
+              <p className="text-sm font-semibold uppercase tracking-[0.18em] text-muted-foreground">Promo Code</p>
+              <h2 className="mt-1 text-xl font-bold">Redeem a code</h2>
+              <p className="mt-1 text-sm text-muted-foreground">Codes can unlock bonus coins or instant item rewards.</p>
+            </div>
+            <div className="flex w-full flex-col gap-2 sm:flex-row md:w-auto md:min-w-[360px]">
+              <Input
+                value={promoCode}
+                onChange={(event) => setPromoCode(event.target.value.toUpperCase())}
+                placeholder="Enter code"
+                maxLength={24}
+                className={isPlayful ? 'rounded-full' : 'rounded-md'}
+              />
+              <Button
+                onClick={handleRedeemPromoCode}
+                disabled={redeemingPromo || !promoCode.trim()}
+                className={isPlayful ? 'rounded-full' : 'rounded-md'}
+              >
+                {redeemingPromo ? 'Redeeming...' : 'Redeem'}
+              </Button>
+            </div>
           </div>
         </div>
 

@@ -203,6 +203,16 @@ class ResetProgressRequest(BaseModel):
 class CoinsAwardRequest(BaseModel):
     amount: int
 
+
+class PromoCodeItemReward(BaseModel):
+    sector: str
+    name: str
+    quantity: int = 1
+
+
+class PromoCodeRedeemRequest(BaseModel):
+    code: str
+
 # Helper functions
 def hash_password(password: str) -> str:
     return bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
@@ -268,6 +278,134 @@ def normalize_chore_templates(templates: List[str]) -> List[str]:
         seen.add(key)
         normalized.append(cleaned[:60])
     return normalized[:30]
+
+
+def normalize_promo_code(code: str) -> str:
+    return "".join(char for char in code.upper().strip() if char.isalnum())
+
+
+DEFAULT_PROMO_CODES = [
+    {
+        "id": "promo-welcome-100",
+        "code": "WELCOME100",
+        "description": "Starter promo code for 100 coins",
+        "active": True,
+        "rewards": {"coins": 100, "xp": 0, "items": []},
+        "max_redemptions": None,
+        "created_at": "2026-04-24T00:00:00+00:00",
+    },
+    {
+        "id": "promo-focus-flow",
+        "code": "FOCUSFLOW",
+        "description": "Unlock the Focus Flow track",
+        "active": True,
+        "rewards": {
+            "coins": 0,
+            "xp": 0,
+            "items": [{"sector": "main", "name": "Focus Flow"}],
+        },
+        "max_redemptions": None,
+        "created_at": "2026-04-24T00:00:00+00:00",
+    },
+    {
+        "id": "promo-gdxas-birthday-16",
+        "code": "GDXASBIRTHDAY16",
+        "description": "Birthday promo with XP, coins, and chore boosters",
+        "active": True,
+        "rewards": {
+            "coins": 1500,
+            "xp": 500,
+            "items": [{"sector": "chores", "name": "Double XP Boost", "quantity": 5}],
+        },
+        "max_redemptions": None,
+        "created_at": "2026-04-24T00:00:00+00:00",
+    },
+]
+
+
+async def ensure_default_promo_codes():
+    for promo_code in DEFAULT_PROMO_CODES:
+        await db.promo_codes.update_one(
+            {"code": promo_code["code"]},
+            {"$setOnInsert": promo_code},
+            upsert=True,
+        )
+
+
+async def grant_shop_item_to_user(
+    user_state: Dict[str, Any],
+    item: Dict[str, Any],
+    *,
+    set_updates: Optional[Dict[str, Any]] = None,
+    allow_duplicate_non_powerup: bool = False,
+    inventory_source: str = "purchase",
+):
+    existing_inventory = await db.user_inventory.find_one(
+        {"user_id": user_state["id"], "item_id": item["id"]},
+        {"_id": 0},
+    )
+    if item["type"] != "powerup" and existing_inventory and not allow_duplicate_non_powerup:
+        raise HTTPException(status_code=400, detail="You already own this item")
+
+    final_set_updates = dict(set_updates or {})
+    push_updates = {}
+
+    if item["type"] == "pet":
+        final_set_updates["equipped_pet_item_id"] = item["id"]
+        if item["id"] not in user_state["pets_owned"]:
+            push_updates["pets_owned"] = item["id"]
+            user_state["pets_owned"].append(item["id"])
+        user_state["equipped_pet_item_id"] = item["id"]
+    elif item["type"] == "tool" and item["name"] == "Music Player":
+        final_set_updates["music_player_owned"] = True
+        final_set_updates["music_player_enabled"] = True
+        user_state["music_player_owned"] = True
+        user_state["music_player_enabled"] = True
+    elif item["type"] == "music":
+        final_set_updates["equipped_music_item_id"] = item["id"]
+        if item["id"] not in user_state["music_tracks_owned"]:
+            push_updates["music_tracks_owned"] = item["id"]
+            user_state["music_tracks_owned"].append(item["id"])
+        user_state["equipped_music_item_id"] = item["id"]
+    elif item["type"] == "theme":
+        final_set_updates["equipped_theme_item_id"] = item["id"]
+        user_state["equipped_theme_item_id"] = item["id"]
+
+    if final_set_updates:
+        for key, value in final_set_updates.items():
+            user_state[key] = value
+
+    update_doc = {}
+    if final_set_updates:
+        update_doc["$set"] = final_set_updates
+    if push_updates:
+        update_doc["$push"] = push_updates
+
+    if update_doc:
+        await db.users.update_one({"id": user_state["id"]}, update_doc)
+
+    inventory_doc = {
+        "id": str(uuid.uuid4()),
+        "user_id": user_state["id"],
+        "item_id": item["id"],
+        "purchased_at": datetime.now(timezone.utc).isoformat(),
+        "source": inventory_source,
+    }
+    await db.user_inventory.insert_one(inventory_doc)
+    return item
+
+
+async def apply_new_achievements(user_id: str):
+    updated_user = await db.users.find_one({"id": user_id}, {"_id": 0, "password": 0})
+    new_achievements = await check_achievements(User(**updated_user))
+
+    if new_achievements:
+        await db.users.update_one(
+            {"id": user_id},
+            {"$push": {"achievements": {"$each": new_achievements}}},
+        )
+
+    return new_achievements
 
 
 def build_reset_user_state(current_user: User) -> Dict[str, Any]:
@@ -745,63 +883,135 @@ async def purchase_item(purchase: PurchaseRequest, current_user: User = Depends(
     if not item:
         raise HTTPException(status_code=404, detail="Item not found")
 
-    if item["type"] != "powerup":
-        existing_inventory = await db.user_inventory.find_one(
-            {"user_id": current_user.id, "item_id": purchase.item_id},
-            {"_id": 0}
-        )
-        if existing_inventory:
-            raise HTTPException(status_code=400, detail="You already own this item")
-    
-    coin_field = "coins"
-    user_coins = current_user.coins
-    
-    if user_coins < item["cost"]:
+    if current_user.coins < item["cost"]:
         raise HTTPException(status_code=400, detail="Insufficient coins")
 
-    update_doc = {coin_field: user_coins - item["cost"]}
-    
-    if item["type"] == "pet":
-        update_doc["equipped_pet_item_id"] = purchase.item_id
-        await db.users.update_one(
-            {"id": current_user.id},
-            {"$push": {"pets_owned": purchase.item_id}, "$set": update_doc}
-        )
-    elif item["type"] == "tool" and item["name"] == "Music Player":
-        update_doc["music_player_owned"] = True
-        update_doc["music_player_enabled"] = True
-        await db.users.update_one({"id": current_user.id}, {"$set": update_doc})
-    elif item["type"] == "music":
-        update_doc["equipped_music_item_id"] = purchase.item_id
-        await db.users.update_one(
-            {"id": current_user.id},
-            {"$push": {"music_tracks_owned": purchase.item_id}, "$set": update_doc}
-        )
-    elif item["type"] == "theme":
-        update_doc["equipped_theme_item_id"] = purchase.item_id
-        await db.users.update_one({"id": current_user.id}, {"$set": update_doc})
-    else:
-        await db.users.update_one({"id": current_user.id}, {"$set": update_doc})
-    
-    inventory_doc = {
-        "id": str(uuid.uuid4()),
-        "user_id": current_user.id,
-        "item_id": purchase.item_id,
-        "purchased_at": datetime.now(timezone.utc).isoformat()
-    }
-    await db.user_inventory.insert_one(inventory_doc)
-    
-    # Check for new achievements after purchase
-    updated_user = await db.users.find_one({"id": current_user.id}, {"_id": 0, "password": 0})
-    new_achievements = await check_achievements(User(**updated_user))
-    
-    if new_achievements:
-        await db.users.update_one(
-            {"id": current_user.id},
-            {"$push": {"achievements": {"$each": new_achievements}}}
-        )
-    
+    user_state = current_user.model_dump()
+    new_coin_total = current_user.coins - item["cost"]
+    await grant_shop_item_to_user(
+        user_state,
+        item,
+        set_updates={"coins": new_coin_total},
+        inventory_source="purchase",
+    )
+    new_achievements = await apply_new_achievements(current_user.id)
+
     return {"success": True, "item": item, "new_achievements": new_achievements}
+
+
+@api_router.post("/shop/promo-codes/redeem")
+async def redeem_promo_code(
+    payload: PromoCodeRedeemRequest,
+    current_user: User = Depends(get_current_user),
+):
+    code = normalize_promo_code(payload.code)
+    if not code:
+        raise HTTPException(status_code=400, detail="Promo code is required")
+
+    await ensure_default_promo_codes()
+
+    promo_code = await db.promo_codes.find_one({"code": code}, {"_id": 0})
+    if not promo_code or not promo_code.get("active", False):
+        raise HTTPException(status_code=404, detail="Promo code not found")
+
+    expires_at = promo_code.get("expires_at")
+    if expires_at and datetime.fromisoformat(expires_at) <= datetime.now(timezone.utc):
+        raise HTTPException(status_code=400, detail="Promo code has expired")
+
+    existing_redemption = await db.promo_code_redemptions.find_one(
+        {"promo_code_id": promo_code["id"], "user_id": current_user.id},
+        {"_id": 0},
+    )
+    if existing_redemption:
+        raise HTTPException(status_code=400, detail="You have already redeemed this code")
+
+    max_redemptions = promo_code.get("max_redemptions")
+    if max_redemptions is not None:
+        total_redemptions = await db.promo_code_redemptions.count_documents(
+            {"promo_code_id": promo_code["id"]}
+        )
+        if total_redemptions >= max_redemptions:
+            raise HTTPException(status_code=400, detail="Promo code has reached its redemption limit")
+
+    user_state = current_user.model_dump()
+    rewards = promo_code.get("rewards") or {}
+    granted_xp = max(0, int(rewards.get("xp") or 0))
+    granted_coins = max(0, int(rewards.get("coins") or 0))
+    granted_items = []
+    skipped_items = []
+    user_updates = {}
+
+    if granted_xp:
+        user_state["accountable_xp"] = current_user.accountable_xp + granted_xp
+        user_state["accountable_level"] = calculate_level(user_state["accountable_xp"])
+        user_updates["accountable_xp"] = user_state["accountable_xp"]
+        user_updates["accountable_level"] = user_state["accountable_level"]
+    if granted_coins:
+        user_state["coins"] = current_user.coins + granted_coins
+        user_updates["coins"] = user_state["coins"]
+    if user_updates:
+        await db.users.update_one(
+            {"id": current_user.id},
+            {"$set": user_updates},
+        )
+
+    for item_reward in rewards.get("items") or []:
+        reward = PromoCodeItemReward(**item_reward)
+        await get_shop_items_for_sector(reward.sector)
+        item = await db.shop_items.find_one(
+            {"sector": reward.sector, "name": reward.name},
+            {"_id": 0},
+        )
+        if not item:
+            skipped_items.append(reward.name)
+            continue
+
+        quantity = max(1, reward.quantity)
+        granted_count = 0
+        try:
+            for _ in range(quantity):
+                await grant_shop_item_to_user(
+                    user_state,
+                    item,
+                    inventory_source=f"promo:{promo_code['code']}",
+                )
+                granted_count += 1
+        except HTTPException as exc:
+            if exc.status_code == 400 and exc.detail == "You already own this item":
+                skipped_items.append(item["name"])
+            else:
+                raise
+
+        if granted_count:
+            granted_items.append(f"{item['name']} x{granted_count}" if granted_count > 1 else item["name"])
+
+    if granted_xp == 0 and granted_coins == 0 and not granted_items:
+        raise HTTPException(status_code=400, detail="Promo code has no available rewards for your account")
+
+    redemption_doc = {
+        "id": str(uuid.uuid4()),
+        "promo_code_id": promo_code["id"],
+        "code": promo_code["code"],
+        "user_id": current_user.id,
+        "redeemed_at": datetime.now(timezone.utc).isoformat(),
+        "granted_xp": granted_xp,
+        "granted_coins": granted_coins,
+        "granted_items": granted_items,
+        "skipped_items": skipped_items,
+    }
+    await db.promo_code_redemptions.insert_one(redemption_doc)
+
+    new_achievements = await apply_new_achievements(current_user.id)
+    return {
+        "success": True,
+        "code": promo_code["code"],
+        "description": promo_code.get("description"),
+        "granted_xp": granted_xp,
+        "granted_coins": granted_coins,
+        "granted_items": granted_items,
+        "skipped_items": skipped_items,
+        "new_achievements": new_achievements,
+    }
 
 
 @api_router.get("/inventory")
